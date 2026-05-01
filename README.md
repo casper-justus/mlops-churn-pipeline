@@ -1,12 +1,12 @@
 # MLOps Churn Prediction Pipeline
 
+[![CI/CD](https://github.com/casper-justus/mlops-churn-pipeline/actions/workflows/cicd.yml/badge.svg)](https://github.com/casper-justus/mlops-churn-pipeline/actions/workflows/cicd.yml)
 ![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688?logo=fastapi)
 ![MLflow](https://img.shields.io/badge/MLflow-2.9.2-0194E2?logo=mlflow)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)
 ![Terraform](https://img.shields.io/badge/Terraform-1.0+-844FBA?logo=terraform)
 ![AWS](https://img.shields.io/badge/AWS-EC2%20%7C%20Lambda-232F3E?logo=amazonaws)
-![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?logo=githubactions)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 > **3-in-1 Portfolio Project** — Covers AI Engineering + Data Engineering + DevOps roles in a single end-to-end system.
@@ -55,11 +55,11 @@ Trains a customer churn prediction model, tracks experiments with MLflow, packag
                                        │
                           ┌────────────┴────────────┐
                           ▼                         ▼
-              ┌───────────────────────┐   ┌──────────────────────┐
+              ┌─────────────────────┐   ┌──────────────────────┐
               │  EC2 Auto Scaling     │   │  Lambda (Serverless) │
               │  FastAPI on :8000     │   │  API Gateway URL     │
               │  Load balanced        │   │  S3 model storage    │
-              └───────────────────────┘   └──────────────────────┘
+              └─────────────────────┘   └──────────────────────┘
 ```
 
 ## Tech Stack
@@ -79,7 +79,7 @@ Trains a customer churn prediction model, tracks experiments with MLflow, packag
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/mlops-churn-pipeline.git
+git clone https://github.com/casper-justus/mlops-churn-pipeline.git
 cd mlops-churn-pipeline
 pip install -r requirements.txt
 ```
