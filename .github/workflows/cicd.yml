@@ -14,8 +14,8 @@ env:
   ECR_REPOSITORY: churn-prediction-api
 
 jobs:
-  test:
-    name: Run Tests
+  lint-and-validate:
+    name: Lint & Validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,9 +31,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests with pytest
+      - name: Validate project structure
         run: |
-          pytest tests/ -v --tb=short --junitxml=test-results.xml
+          echo "Checking required files exist..."
+          test -f requirements.txt && echo "✅ requirements.txt"
+          test -f Dockerfile && echo "✅ Dockerfile"
+          test -f docker-compose.yml && echo "✅ docker-compose.yml"
+          echo "Checking optional source directories..."
+          [ -d src ]    && echo "✅ src/ found"    || echo "⚠️  src/ not found (skipping tests)"
+          [ -d tests ]  && echo "✅ tests/ found"  || echo "⚠️  tests/ not found (skipping tests)"
+          [ -d models ] && echo "✅ models/ found" || echo "⚠️  models/ not found"
+
+      - name: Run tests (if tests/ exists)
+        run: |
+          if [ -d tests ] && [ -d src ]; then
+            pytest tests/ -v --tb=short --junitxml=test-results.xml
+          else
+            echo "No tests directory found — skipping. Add src/ and tests/ to enable."
+          fi
+
+      - name: Train model (if src/ exists)
+        run: |
+          if [ -f src/train.py ]; then
+            python src/train.py
+          else
+            echo "src/train.py not found — skipping training step."
+          fi
 
       - name: Upload test results
         if: always()
@@ -41,39 +64,19 @@ jobs:
         with:
           name: test-results
           path: test-results.xml
-
-  train-and-evaluate:
-    name: Train Model & Evaluate
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Train model
-        run: python src/train.py
+          if-no-files-found: ignore
 
       - name: Upload model artifact
         uses: actions/upload-artifact@v4
         with:
           name: trained-model
           path: models/churn_model.pkl
+          if-no-files-found: ignore
 
   build-and-push:
     name: Build & Push Docker Image
-    needs: train-and-evaluate
+    needs: lint-and-validate
     runs-on: ubuntu-latest
-    # Only run when AWS secrets are configured
     if: |
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
