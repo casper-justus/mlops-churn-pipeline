@@ -7,11 +7,11 @@ on:
     branches: [main]
   schedule:
     - cron: '0 0 * * 1'
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: churn-prediction-api
-  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
 
 jobs:
   test:
@@ -46,7 +46,6 @@ jobs:
     name: Train Model & Evaluate
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'schedule'
     steps:
       - uses: actions/checkout@v4
 
@@ -62,10 +61,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Train model
-        run: |
-          python src/train.py
-        env:
-          MLFLOW_TRACKING_URI: ${{ env.MLFLOW_TRACKING_URI }}
+        run: python src/train.py
 
       - name: Upload model artifact
         uses: actions/upload-artifact@v4
@@ -75,19 +71,22 @@ jobs:
 
   build-and-push:
     name: Build & Push Docker Image
-    needs: test
+    needs: train-and-evaluate
     runs-on: ubuntu-latest
+    # Only run when AWS secrets are configured
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      secrets.AWS_ACCESS_KEY_ID != ''
     permissions:
       contents: read
-      packages: write
       id-token: write
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
+      image-tag: ${{ steps.build.outputs.image_tag }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Download model artifact
-        if: needs.train-and-evaluate.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: trained-model
@@ -105,6 +104,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push image
+        id: build
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -113,12 +113,16 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image_tag=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
   deploy-ec2:
-    name: Deploy to EC2
+    name: Deploy to EC2 (Terraform)
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      secrets.AWS_ACCESS_KEY_ID != ''
     steps:
       - uses: actions/checkout@v4
 
@@ -128,6 +132,9 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
       - name: Deploy via Terraform
         working-directory: infra/terraform
@@ -142,7 +149,10 @@ jobs:
     name: Deploy to Lambda
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      secrets.AWS_ACCESS_KEY_ID != ''
     steps:
       - uses: actions/checkout@v4
 
@@ -162,4 +172,4 @@ jobs:
           aws lambda update-function-code \
             --function-name churn-predictor \
             --zip-file fileb://infra/lambda/lambda_function.zip \
-            --region ${{ env.AWS_REGION }} || echo "Lambda function needs to be created first"
+            --region ${{ env.AWS_REGION }}
