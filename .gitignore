@@ -1,0 +1,11 @@
+src/
+tests/
+data/
+models/
+mlruns/
+.env
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.DS_Store
