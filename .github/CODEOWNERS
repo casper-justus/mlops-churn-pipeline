@@ -1,0 +1,18 @@
+# Global owner — all files
+* @casper-justus
+
+# ML training & serving
+src/ @casper-justus
+
+# Tests
+tests/ @casper-justus
+
+# Infrastructure as Code
+infra/ @casper-justus
+
+# Docker
+Dockerfile @casper-justus
+docker-compose.yml @casper-justus
+
+# CI/CD & security workflows
+.github/workflows/ @casper-justus
