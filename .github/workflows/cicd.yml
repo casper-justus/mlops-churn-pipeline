@@ -47,7 +47,7 @@ jobs:
           if [ -d tests ] && [ -d src ]; then
             pytest tests/ -v --tb=short --junitxml=test-results.xml
           else
-            echo "No tests directory found — skipping. Add src/ and tests/ to enable."
+            echo "No tests directory found — skipping."
           fi
 
       - name: Train model (if src/ exists)
@@ -76,9 +76,6 @@ jobs:
   build-and-push:
     name: Build & Push Docker Image
     needs: lint-and-validate
-    # secrets context is not available in job-level if conditions.
-    # Gate on push to main only; the configure-aws step will fail fast
-    # if secrets are not set, which is acceptable for a portfolio project.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -89,12 +86,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download model artifact
+      - name: Download model artifact (if available)
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: trained-model
           path: models/
-          # Artifact may not exist if train step was skipped
 
       - name: Check AWS secrets are configured
         id: check-aws
