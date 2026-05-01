@@ -68,13 +68,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
       - name: Run Trivy on Terraform configs
-        uses: aquasecurity/trivy-action@0.30.0
-        with:
-          scan-type: config
-          scan-ref: infra/
-          format: table
-          exit-code: 0
+        run: trivy config infra/ --exit-code 0 --severity HIGH,CRITICAL
 
   trivy-docker:
     name: Trivy Docker Image Scan
@@ -93,18 +92,18 @@ jobs:
             echo "⚠️ src/ not found — skipping Docker image scan."
           fi
 
+      - name: Install Trivy
+        if: steps.check-src.outputs.exists == 'true'
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
       - name: Build Docker image
         if: steps.check-src.outputs.exists == 'true'
         run: docker build -t mlops-churn:scan .
 
-      - name: Run Trivy on image
+      - name: Scan Docker image
         if: steps.check-src.outputs.exists == 'true'
-        uses: aquasecurity/trivy-action@0.30.0
-        with:
-          image-ref: mlops-churn:scan
-          format: table
-          exit-code: 0
-          severity: CRITICAL,HIGH
+        run: trivy image mlops-churn:scan --exit-code 0 --severity CRITICAL,HIGH
 
   dependency-review:
     name: Dependency Review
