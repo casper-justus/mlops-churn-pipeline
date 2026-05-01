@@ -76,11 +76,11 @@ jobs:
   build-and-push:
     name: Build & Push Docker Image
     needs: lint-and-validate
+    # secrets context is not available in job-level if conditions.
+    # Gate on push to main only; the configure-aws step will fail fast
+    # if secrets are not set, which is acceptable for a portfolio project.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      secrets.AWS_ACCESS_KEY_ID != ''
     permissions:
       contents: read
       id-token: write
@@ -94,8 +94,20 @@ jobs:
         with:
           name: trained-model
           path: models/
+          # Artifact may not exist if train step was skipped
+
+      - name: Check AWS secrets are configured
+        id: check-aws
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "⚠️ AWS secrets not configured — skipping build & push."
+          else
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Configure AWS credentials
+        if: steps.check-aws.outputs.configured == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -103,10 +115,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: steps.check-aws.outputs.configured == 'true'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push image
+        if: steps.check-aws.outputs.configured == 'true'
         id: build
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -121,15 +135,23 @@ jobs:
   deploy-ec2:
     name: Deploy to EC2 (Terraform)
     needs: build-and-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    if: |
-      github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' &&
-      secrets.AWS_ACCESS_KEY_ID != ''
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check AWS secrets are configured
+        id: check-aws
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "⚠️ AWS secrets not configured — skipping deploy."
+          else
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Configure AWS credentials
+        if: steps.check-aws.outputs.configured == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -137,9 +159,11 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
+        if: steps.check-aws.outputs.configured == 'true'
         uses: hashicorp/setup-terraform@v3
 
       - name: Deploy via Terraform
+        if: steps.check-aws.outputs.configured == 'true'
         working-directory: infra/terraform
         run: |
           terraform init
@@ -151,15 +175,23 @@ jobs:
   deploy-lambda:
     name: Deploy to Lambda
     needs: build-and-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    if: |
-      github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' &&
-      secrets.AWS_ACCESS_KEY_ID != ''
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check AWS secrets are configured
+        id: check-aws
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "⚠️ AWS secrets not configured — skipping deploy."
+          else
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Configure AWS credentials
+        if: steps.check-aws.outputs.configured == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -167,10 +199,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Package Lambda function
+        if: steps.check-aws.outputs.configured == 'true'
         run: |
           zip -j infra/lambda/lambda_function.zip infra/lambda/lambda_function.py
 
       - name: Deploy Lambda
+        if: steps.check-aws.outputs.configured == 'true'
         run: |
           aws lambda update-function-code \
             --function-name churn-predictor \
